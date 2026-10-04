@@ -101,7 +101,7 @@ object Optimizer {
                 killed++
             }
         }
-        ShellEngine.killBackground(mode)
+        ShellEngine.exec(mode, "am kill-all")
         results.add(StepResult("清理后台干扰源", killed > 0, "命中 $killed 个已安装噪声应用"))
 
         // 4. 内存收缩

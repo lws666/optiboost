@@ -2,9 +2,8 @@ package com.lwsnb.optiboost.engine
 
 import android.content.pm.PackageManager
 import android.util.Log
-import dev.rikka.shizuku.IShizukuService
-import rikka.sui.Sui
-import java.io.InputStream
+import android.os.ParcelFileDescriptor
+import moe.shizuku.server.IShizukuService
 import rikka.shizuku.Shizuku
 import rikka.shizuku.ShizukuBinderWrapper
 
@@ -57,14 +56,13 @@ object ShellEngine {
             ?: return Pair(-1, "shizuku binder not ready")
         val service = IShizukuService.Stub.asInterface(ShizukuBinderWrapper(binder))
             ?: return Pair(-1, "shizuku service null")
-        val p: Any = service.newProcess(arrayOf("sh", "-c", cmd), null, null)
+        val p = service.newProcess(arrayOf("sh", "-c", cmd), null, null)
             ?: return Pair(-1, "null process")
-        val out = (p.javaClass.getMethod("getInputStream").invoke(p) as InputStream)
+        val out = ParcelFileDescriptor.AutoCloseInputStream(p.inputStream)
             .bufferedReader().use { it.readText() }
-        val err = (p.javaClass.getMethod("getErrorStream").invoke(p) as InputStream)
+        val err = ParcelFileDescriptor.AutoCloseInputStream(p.errorStream)
             .bufferedReader().use { it.readText() }
-        p.javaClass.getMethod("waitFor").invoke(p)
-        val code = p.javaClass.getMethod("exitValue").invoke(p) as Int
+        val code = p.waitFor()
         Pair(code, (out + "\n" + err).trim())
     } catch (t: Throwable) {
         Log.w(TAG, "shizukuExec: ${t.message}")

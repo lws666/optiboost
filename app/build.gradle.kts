@@ -44,4 +44,5 @@ dependencies {
     implementation(libs.compose.material.icons)
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
+    implementation(libs.shizuku.aidl)
 }
