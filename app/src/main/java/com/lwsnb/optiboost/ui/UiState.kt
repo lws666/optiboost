@@ -35,7 +35,7 @@ object UiState {
 
     // 应用管理
     var appSearch by mutableStateOf("")
-    val frozenSet = mutableStateOf(setOf<String>())
+    var frozenSet by mutableStateOf(setOf<String>())
 
     fun log(s: String) {
         logs.add(0, "[${SysReader.currentTime()}] $s")
@@ -80,7 +80,7 @@ object UiState {
             val mode = ShellEngine.detectMode()
             if (mode == ShellEngine.Mode.NONE) return@launch
             val (_, out) = ShellEngine.exec(mode, "pm list packages -d")
-            frozenSet.value = out.lineSequence()
+            frozenSet = out.lineSequence()
                 .map { it.trim().removePrefix("package:") }
                 .filter { it.isNotBlank() }
                 .toSet()
@@ -120,14 +120,14 @@ object UiState {
         busy = true
         scope.launch(Dispatchers.IO) {
             try {
-                val frozen = pkg in frozenSet.value
+                val frozen = pkg in frozenSet
                 val (code, out) =
                     if (frozen) ShellEngine.unfreeze(mode, pkg)
                     else ShellEngine.freeze(mode, pkg)
                 log("${if (frozen) "解冻" else "冻结"} $pkg → $code $out")
                 if (code == 0) {
-                    frozenSet.value =
-                        if (frozen) frozenSet.value - pkg else frozenSet.value + pkg
+                    frozenSet =
+                        if (frozen) frozenSet - pkg else frozenSet + pkg
                 }
             } finally {
                 busy = false

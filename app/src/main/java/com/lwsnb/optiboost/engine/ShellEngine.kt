@@ -1,9 +1,12 @@
 package com.lwsnb.optiboost.engine
 
-import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
+import dev.rikka.shizuku.IShizukuService
+import rikka.sui.Sui
+import java.io.InputStream
 import rikka.shizuku.Shizuku
+import rikka.shizuku.ShizukuBinderWrapper
 
 /**
  * 命令执行引擎：Shizuku（免 root，shell 身份）优先，不可用时回退到 Root（su）。
@@ -47,22 +50,43 @@ object ShellEngine {
         else -> Mode.NONE
     }
 
-    // ---------- 执行 ----------
+    // ---------- Shizuku 执行（IShizukuService AIDL + 反射读取隐藏类 Process） ----------
 
-    /** 执行单条命令，返回 Pair(退出码, 合并输出) */
-    fun exec(mode: Mode, cmd: String): Pair<Int, String> = try {
-        val p = when (mode) {
-            Mode.SHIZUKU -> Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, null)
-            Mode.ROOT -> Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
-            Mode.NONE -> return Pair(-1, "no engine")
-        }
+    private fun shizukuExec(cmd: String): Pair<Int, String> = try {
+        val binder = Shizuku.getBinder()
+            ?: return Pair(-1, "shizuku binder not ready")
+        val service = IShizukuService.Stub.asInterface(ShizukuBinderWrapper(binder))
+            ?: return Pair(-1, "shizuku service null")
+        val p: Any = service.newProcess(arrayOf("sh", "-c", cmd), null, null)
+            ?: return Pair(-1, "null process")
+        val out = (p.javaClass.getMethod("getInputStream").invoke(p) as InputStream)
+            .bufferedReader().use { it.readText() }
+        val err = (p.javaClass.getMethod("getErrorStream").invoke(p) as InputStream)
+            .bufferedReader().use { it.readText() }
+        p.javaClass.getMethod("waitFor").invoke(p)
+        val code = p.javaClass.getMethod("exitValue").invoke(p) as Int
+        Pair(code, (out + "\n" + err).trim())
+    } catch (t: Throwable) {
+        Log.w(TAG, "shizukuExec: ${t.message}")
+        Pair(-1, t.message ?: "shizuku error")
+    }
+
+    private fun rootExec(cmd: String): Pair<Int, String> = try {
+        val p = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
         val out = p.inputStream.bufferedReader().use { it.readText() }
         val err = p.errorStream.bufferedReader().use { it.readText() }
         p.waitFor()
         Pair(p.exitValue(), (out + "\n" + err).trim())
     } catch (t: Throwable) {
-        Log.w(TAG, "exec[$mode] $cmd -> ${t.message}")
-        Pair(-1, t.message ?: "error")
+        Log.w(TAG, "rootExec: ${t.message}")
+        Pair(-1, t.message ?: "root error")
+    }
+
+    /** 执行单条命令，返回 Pair(退出码, 合并输出) */
+    fun exec(mode: Mode, cmd: String): Pair<Int, String> = when (mode) {
+        Mode.SHIZUKU -> shizukuExec(cmd)
+        Mode.ROOT -> rootExec(cmd)
+        Mode.NONE -> Pair(-1, "no engine")
     }
 
     fun exec(cmd: String): Pair<Int, String> {
@@ -96,17 +120,4 @@ object ShellEngine {
         val (_, out) = exec(mode, "pm list packages -d $pkg")
         return out.contains("package:$pkg")
     }
-
-    fun trimCaches(mode: Mode): Pair<Int, String> =
-        exec(mode, "sync; echo 3 > /proc/sys/vm/drop_caches")
-
-    fun killBackground(mode: Mode): Pair<Int, String> =
-        exec(mode, "am kill-all")
-
-    /** 读取温控文件路径存在性，返回 (路径, 是否存在) */
-    fun findThermalConfig(mode: Mode, paths: List<String>): String? =
-        paths.firstOrNull { path ->
-            val (code, _) = exec(mode, "ls $path")
-            code == 0
-        }
 }

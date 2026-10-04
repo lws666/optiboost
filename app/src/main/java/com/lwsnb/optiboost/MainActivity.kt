@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,7 +29,7 @@ import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Snowflake
+import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -156,11 +157,11 @@ fun OptiBoostUI() {
 // ===================== 通用组件 =====================
 
 @Composable
-fun StatCard(title: String, value: String, sub: String, tint: Color) {
+fun StatCard(scope: RowScope, title: String, value: String, sub: String, tint: Color) {
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardDeep),
-        modifier = Modifier.weight(1f)
+        modifier = with(scope) { Modifier.weight(1f) }
     ) {
         Column(Modifier.padding(14.dp)) {
             Text(title, fontSize = 12.sp, color = TextDim)
@@ -268,12 +269,12 @@ fun HomePage() {
         val used = UiState.memTotalKb - UiState.memAvailKb
         val memPct = if (UiState.memTotalKb > 0) (used * 100 / UiState.memTotalKb).toInt() else -1
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatCard(
+            StatCard(this@Row,
                 "内存", if (memPct >= 0) "$memPct%" else "--",
                 "${fmtKb(used)} / ${fmtKb(UiState.memTotalKb)}",
                 if (memPct > 85) AccentRed else AccentCyan
             )
-            StatCard(
+            StatCard(this@Row,
                 "CPU", if (UiState.cpuUsage >= 0) "${UiState.cpuUsage}%" else "--",
                 "${SysReader.cpuCores()} 核 ${freqText()}",
                 if (UiState.cpuUsage > 85) AccentRed else AccentGreen
@@ -281,13 +282,13 @@ fun HomePage() {
         }
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatCard(
+            StatCard(this@Row,
                 "电池温度",
                 if (UiState.batteryTemp > 0) "%.1f℃".format(UiState.batteryTemp / 10.0) else "--",
                 "电量 ${if (UiState.batteryLevel >= 0) "${UiState.batteryLevel}%" else "--"}",
                 if (UiState.batteryTemp > 400) AccentRed else AccentAmber
             )
-            StatCard(
+            StatCard(this@Row,
                 "机身温度",
                 if (UiState.zoneTemp > 0) "${UiState.zoneTemp}℃" else "--",
                 "thermal 最高读数",
@@ -405,13 +406,13 @@ fun ThermalPage() {
         Spacer(Modifier.height(16.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            StatCard(
+            StatCard(this@Row,
                 "电池",
                 if (UiState.batteryTemp > 0) "%.1f℃".format(UiState.batteryTemp / 10.0) else "--",
                 "电量 ${UiState.batteryLevel}%",
                 if (UiState.batteryTemp > 400) AccentRed else AccentGreen
             )
-            StatCard(
+            StatCard(this@Row,
                 "机身",
                 if (UiState.zoneTemp > 0) "${UiState.zoneTemp}℃" else "--",
                 "thermal zone max",
@@ -452,17 +453,20 @@ fun AppsPage() {
     LaunchedEffect(refreshTick) { UiState.refreshFrozen(app.appScope) }
 
     val query = UiState.appSearch
-    val frozen = UiState.frozenSet
-    val apps = remember(query, refreshTick, frozen.size, app.packageCache.size) {
+    val frozenSet = UiState.frozenSet
+    val pkgCount = app.packageCache.size
+    data class AppRow(val pkg: String, val name: String, val frozen: Boolean)
+    val apps = remember(query, refreshTick, frozenSet.size, pkgCount) {
+        val frozen = frozenSet
         app.packageCache
             .filter { app.isUserApp(it) }
             .mapNotNull { info ->
                 val name = app.appName(info)
                 if (query.isBlank() || name.contains(query, true) || info.packageName.contains(query, true))
-                    Triple(info.packageName, name, info.packageName in frozen)
+                    AppRow(info.packageName, name, info.packageName in frozen)
                 else null
             }
-            .sortedWith(compareByDescending<Triple<String, String, Boolean>> { it.third }.thenBy { it.second })
+            .sortedWith(compareByDescending<AppRow> { it.frozen }.thenBy { it.name })
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
@@ -490,7 +494,7 @@ fun AppsPage() {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("用户应用 ${apps.size} 个", fontSize = 12.sp, color = TextDim)
             Spacer(Modifier.weight(1f))
-            Text("冻结 ${frozen.size} 个", fontSize = 12.sp, color = AccentCyan)
+            Text("冻结 ${frozenSet.size} 个", fontSize = 12.sp, color = AccentCyan)
             Spacer(Modifier.width(8.dp))
             OutlinedButton(onClick = {
                 app.refreshPackages()
@@ -502,7 +506,9 @@ fun AppsPage() {
             verticalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(apps) { (pkg, name, isFrozen) ->
+            items(apps) { row ->
+                val pkg = row.pkg
+                val isFrozen = row.frozen
                 Card(
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = CardDeep)
@@ -512,12 +518,12 @@ fun AppsPage() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text(name, fontSize = 14.sp, color = Color.White, maxLines = 1)
+                            Text(row.name, fontSize = 14.sp, color = Color.White, maxLines = 1)
                             Text(pkg, fontSize = 10.sp, color = TextDim, maxLines = 1)
                         }
                         if (isFrozen) {
                             Icon(
-                                Icons.Filled.Snowflake, null,
+                                Icons.Filled.AcUnit, null,
                                 tint = AccentCyan, modifier = Modifier.size(16.dp)
                             )
                             Spacer(Modifier.width(6.dp))

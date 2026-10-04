@@ -43,7 +43,6 @@ object Optimizer {
     suspend fun runQuickBoost(onStep: (String) -> Unit = {}): BoostReport =
         withContext(Dispatchers.IO) {
             val mode = ShellEngine.detectMode()
-            ShellEngine.lastMode = mode
             if (mode == ShellEngine.Mode.NONE) {
                 return@withContext BoostReport(
                     listOf(StepResult("引擎不可用", false, "未授权 Shizuku，也未获取 Root")), mode)
@@ -64,7 +63,6 @@ object Optimizer {
         onStep: (String) -> Unit = {}
     ): BoostReport = withContext(Dispatchers.IO) {
         val mode = ShellEngine.detectMode()
-        ShellEngine.lastMode = mode
         if (mode == ShellEngine.Mode.NONE) {
             return@withContext BoostReport(
                 listOf(StepResult("引擎不可用", false, "未授权 Shizuku，也未获取 Root")), mode)
@@ -149,7 +147,6 @@ object Optimizer {
     suspend fun runThermalReset(onStep: (String) -> Unit = {}): BoostReport =
         withContext(Dispatchers.IO) {
             val mode = ShellEngine.detectMode()
-            ShellEngine.lastMode = mode
             if (mode == ShellEngine.Mode.NONE) {
                 return@withContext BoostReport(
                     listOf(StepResult("引擎不可用", false, "未授权 Shizuku，也未获取 Root")), mode)
