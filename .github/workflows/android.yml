@@ -41,7 +41,8 @@ jobs:
       - name: Rename artifacts
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/optiboost-v1.0.0-arm64.apk
+          release_apk=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          cp "$release_apk" dist/optiboost-v1.0.0.apk
           cp app/build/outputs/apk/debug/app-debug.apk dist/optiboost-debug.apk
           ls -la dist/
 
