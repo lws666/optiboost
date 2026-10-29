@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">极启优化</string>
+    <string name="delta_pkg_cn">com.proxima.dsi</string>
+    <string name="delta_pkg_global">com.proxima.dfm</string>
+</resources>
